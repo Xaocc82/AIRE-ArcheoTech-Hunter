@@ -37,6 +37,13 @@ OCR; it is never treated as successfully transcribed. OCR engines and any
 local model files are optional runtime configuration, remain outside Git, and
 must preserve the engine identity in each resulting record.
 
+## Evidence dossiers
+
+Candidate dossiers bind each quoted statement to an original artifact hash,
+source URL, document reference, page, and character span. They are auditable
+research records for human review—not legal, novelty, functionality, or
+engineering conclusions.
+
 ## Data boundary
 
 Downloaded archive originals and production content-addressed storage stay
