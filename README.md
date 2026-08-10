@@ -59,6 +59,14 @@ research API or user interface. It must not be presented as a completed
 production research pipeline until the durable queue and source-provenance
 gates are implemented.
 
+On a private server, create a real `.env.production` from the example with a
+unique PostgreSQL password, then run:
+
+```sh
+docker compose --env-file .env.production -f compose.production.yaml up -d --build
+curl --fail http://127.0.0.1:8088/healthz
+```
+
 ## Data boundary
 
 Downloaded archive originals and production content-addressed storage stay
