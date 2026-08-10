@@ -44,6 +44,13 @@ source URL, document reference, page, and character span. They are auditable
 research records for human review—not legal, novelty, functionality, or
 engineering conclusions.
 
+## Research screening
+
+Patent, engineering, and safety screening records are limited to
+`PASS_FOR_RESEARCH`, `HOLD`, `REJECT`, and `UNKNOWN`, with a named reviewer
+and rationale. They prioritize what to research next; they are not clearance,
+novelty, safety certification, or functional validation.
+
 ## Data boundary
 
 Downloaded archive originals and production content-addressed storage stay
