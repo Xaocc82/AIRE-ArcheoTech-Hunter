@@ -29,6 +29,14 @@ The first CLI command is intentionally small:
 archeotech --help
 ```
 
+## Processing boundary
+
+The initial worker uses `pypdf` to extract text that is already embedded in a
+PDF. A PDF without an embedded text layer is explicitly marked as requiring
+OCR; it is never treated as successfully transcribed. OCR engines and any
+local model files are optional runtime configuration, remain outside Git, and
+must preserve the engine identity in each resulting record.
+
 ## Data boundary
 
 Downloaded archive originals and production content-addressed storage stay
