@@ -30,4 +30,5 @@ def test_production_environment_file_is_not_committed() -> None:
 def test_readme_uses_explicit_production_environment_file() -> None:
     readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert "docker compose --env-file .env.production -f compose.production.yaml up -d --build" in readme
+    command = "docker compose --env-file .env.production -f compose.production.yaml up -d --build"
+    assert command in readme
