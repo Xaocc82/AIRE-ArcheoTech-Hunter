@@ -2,14 +2,27 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from json import dumps
-from typing import Any
+from io import BytesIO
+from json import JSONDecodeError, dumps, loads
 from urllib.request import Request
 
-from aire_archeotech.sources.base import NormalizedSourceRecord, SourceHit, SourceQuery
+from aire_archeotech.sources.base import (
+    NormalizedSourceRecord,
+    SourceAccessEvidence,
+    SourceAdapter,
+    SourceHit,
+    SourceQuery,
+    SourceSearchFailure,
+    SourceSearchResult,
+    SourceTransportFailure,
+    SourceTransportResponse,
+)
+from aire_archeotech.storage.cas import ContentAddressedStorage
 
 NTRS_SEARCH_URL = "https://ntrs.nasa.gov/api/citations/search"
-Transport = Callable[[Request, float], Mapping[str, Any]]
+Transport = Callable[[Request, float, int], SourceTransportResponse]
+MAX_RESPONSE_BYTES = 1_048_576
+ADAPTER_VERSION = "0.1"
 
 
 @dataclass
@@ -17,14 +30,22 @@ class NasaNtrsAdapter:
     """NASA NTRS adapter whose transport must be explicitly provided."""
 
     transport: Transport
+    storage: ContentAddressedStorage
+    terms_reference: str
+    rights_reference: str
     timeout_seconds: float = 20.0
     code: str = "nasa_ntrs"
     _records: dict[str, NormalizedSourceRecord] = field(default_factory=dict, init=False)
 
-    def search(self, query: SourceQuery) -> tuple[SourceHit, ...]:
+    def __post_init__(self) -> None:
+        if not self.terms_reference.strip() or not self.rights_reference.strip():
+            raise ValueError("source policy reference must not be blank")
+
+    def search(self, query: SourceQuery) -> SourceSearchResult:
+        request_body = dumps(self._payload(query)).encode("utf-8")
         request = Request(
             NTRS_SEARCH_URL,
-            data=dumps(self._payload(query)).encode("utf-8"),
+            data=request_body,
             headers={
                 "Accept": "application/json",
                 "Content-Type": "application/json",
@@ -32,12 +53,136 @@ class NasaNtrsAdapter:
             },
             method="POST",
         )
-        response = self.transport(request, self.timeout_seconds)
-        records = tuple(self._normalize(item) for item in response.get("results", []))
+        raw_request = self.storage.store(BytesIO(request_body), "application/json")
+        try:
+            response = self.transport(request, self.timeout_seconds, MAX_RESPONSE_BYTES)
+        except Exception as error:
+            raise SourceTransportFailure(
+                "NTRS transport failed after request storage", raw_request=raw_request
+            ) from error
+        raw_response = self.storage.store(BytesIO(response.body), response.content_type)
+        access = SourceAccessEvidence(
+            source_code=self.code,
+            adapter_version=ADAPTER_VERSION,
+            requested_url=request.full_url,
+            final_url=response.final_url,
+            request_method=request.get_method(),
+            request_content_type=request.get_header("Content-type") or "",
+            request_byte_size=raw_request.byte_size,
+            status_code=response.status_code,
+            retrieved_at=response.retrieved_at,
+            terms_reference=self.terms_reference,
+            rights_reference=self.rights_reference,
+            request_sha256=raw_request.sha256,
+            raw_response_sha256=raw_response.sha256,
+            response_byte_size=raw_response.byte_size,
+            content_type=response.content_type,
+            transport_bytes_read=response.bytes_read or len(response.body),
+            body_complete=response.body_complete,
+            limit_exceeded=response.limit_exceeded,
+        )
+        if response.status_code != 200:
+            raise SourceSearchFailure(
+                f"NTRS returned HTTP {response.status_code}",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        if response.requested_url != request.full_url:
+            raise SourceSearchFailure(
+                "NTRS requested URL is not allowlisted",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        if response.final_url != NTRS_SEARCH_URL:
+            raise SourceSearchFailure(
+                "NTRS final URL is not allowlisted",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        if response.content_type.split(";", maxsplit=1)[0].strip().lower() != "application/json":
+            raise SourceSearchFailure(
+                "NTRS response content type is not JSON",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        if response.limit_exceeded:
+            raise SourceSearchFailure(
+                "NTRS transport exceeded the response byte limit",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        if not response.body_complete:
+            raise SourceSearchFailure(
+                "NTRS transport did not receive a complete response body",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        if (
+            response.retrieved_at.tzinfo is None
+            or response.retrieved_at.utcoffset() is None
+        ):
+            raise SourceSearchFailure(
+                "NTRS retrieval time must be timezone-aware",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        if len(response.body) > MAX_RESPONSE_BYTES:
+            raise SourceSearchFailure(
+                "NTRS response exceeds the byte limit",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        try:
+            payload = loads(response.body)
+        except JSONDecodeError as error:
+            raise SourceSearchFailure(
+                "NTRS response is not valid JSON",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            ) from error
+        if not isinstance(payload, Mapping):
+            raise SourceSearchFailure(
+                "NTRS response must be a JSON object",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        result_items = payload.get("results", [])
+        if not isinstance(result_items, list):
+            raise SourceSearchFailure(
+                "NTRS response results must be a collection",
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            )
+        try:
+            records = tuple(self._normalize(item) for item in result_items[: query.max_records])
+        except ValueError as error:
+            raise SourceSearchFailure(
+                str(error),
+                access=access,
+                raw_request=raw_request,
+                raw_response=raw_response,
+            ) from error
         self._records.update({record.external_id: record for record in records})
-        return tuple(
+        hits = tuple(
             SourceHit(record.external_id, record.title, record.canonical_reference)
-            for record in records[: query.max_records]
+            for record in records
+        )
+        return SourceSearchResult(
+            hits=hits,
+            access=access,
+            raw_request=raw_request,
+            raw_response=raw_response,
         )
 
     def fetch_record(self, external_id: str) -> NormalizedSourceRecord:
@@ -57,8 +202,12 @@ class NasaNtrsAdapter:
             "size": query.max_records,
         }
 
-    def _normalize(self, item: Mapping[str, Any]) -> NormalizedSourceRecord:
+    def _normalize(self, item: object) -> NormalizedSourceRecord:
+        if not isinstance(item, Mapping):
+            raise ValueError("NTRS response record must be a JSON object")
         source = item.get("_source", item)
+        if not isinstance(source, Mapping):
+            raise ValueError("NTRS response record _source must be a JSON object")
         external_id = str(source.get("id", source.get("document_id", "")))
         if not external_id:
             raise ValueError("NTRS response record is missing an identifier")
@@ -71,3 +220,8 @@ class NasaNtrsAdapter:
             canonical_reference=f"https://ntrs.nasa.gov/citations/{external_id}",
             description=description,
         )
+
+
+def _as_source_adapter(adapter: NasaNtrsAdapter) -> SourceAdapter:
+    """Make the adapter's structural conformance part of the checked source tree."""
+    return adapter
