@@ -38,12 +38,20 @@ class SourceTransportResponse:
     retrieved_at: datetime
     body: bytes
     content_type: str
+    body_complete: bool = True
+    limit_exceeded: bool = False
+    bytes_read: int = 0
 
 
 @dataclass(frozen=True)
 class SourceAccessEvidence:
+    source_code: str
+    adapter_version: str
     requested_url: str
     final_url: str
+    request_method: str
+    request_content_type: str
+    request_byte_size: int
     status_code: int
     retrieved_at: datetime
     terms_reference: str
@@ -52,6 +60,9 @@ class SourceAccessEvidence:
     raw_response_sha256: str
     response_byte_size: int
     content_type: str
+    transport_bytes_read: int
+    body_complete: bool
+    limit_exceeded: bool
 
 
 class SourceSearchFailure(ValueError):
@@ -69,6 +80,16 @@ class SourceSearchFailure(ValueError):
         self.access = access
         self.raw_request = raw_request
         self.raw_response = raw_response
+
+
+class SourceTransportFailure(RuntimeError):
+    """A transport failure after the request body was stored, with no response to preserve."""
+
+    state = "REQUEST_STORED_NO_RESPONSE"
+
+    def __init__(self, message: str, *, raw_request: StoredBlob) -> None:
+        super().__init__(message)
+        self.raw_request = raw_request
 
 
 @dataclass(frozen=True)
@@ -89,7 +110,8 @@ class NormalizedSourceRecord:
 
 
 class SourceAdapter(Protocol):
-    code: str
+    @property
+    def code(self) -> str: ...
 
     def search(self, query: SourceQuery) -> SourceSearchResult: ...
 
