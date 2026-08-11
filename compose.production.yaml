@@ -1,0 +1,46 @@
+name: aire-archeotech
+
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      ARCHEOTECH_DATABASE_HOST: postgres
+      ARCHEOTECH_DATABASE_PORT: "5432"
+      ARCHEOTECH_DATABASE_NAME: ${POSTGRES_DB}
+      ARCHEOTECH_DATABASE_USER: ${POSTGRES_USER}
+      ARCHEOTECH_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      ARCHEOTECH_STORAGE_ROOT: /var/lib/aire-archeotech/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8088:8088"
+    volumes:
+      - artefacts:/var/lib/aire-archeotech
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8088/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  artefacts:
+  postgres-data:

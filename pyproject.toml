@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.27"]
+requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -12,15 +12,18 @@ license = { text = "MIT" }
 authors = [{ name = "AIRE ArcheoTech" }]
 dependencies = [
   "alembic>=1.14,<2",
+  "fastapi>=0.115,<1",
   "pypdf>=5,<7",
   "pydantic-settings>=2.7,<3",
   "psycopg[binary]>=3.2,<4",
   "sqlalchemy>=2.0,<3",
   "typer>=0.15,<1",
+  "uvicorn[standard]>=0.34,<1",
 ]
 
 [project.optional-dependencies]
 dev = [
+  "httpx2>=2.0,<3",
   "mypy>=1.14,<2",
   "pytest>=8.3,<9",
   "ruff>=0.9,<1",
