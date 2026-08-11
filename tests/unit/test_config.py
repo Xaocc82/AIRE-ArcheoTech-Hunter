@@ -11,3 +11,10 @@ def test_settings_read_archeotech_database_url(monkeypatch: MonkeyPatch) -> None
     monkeypatch.setenv("ARCHEOTECH_DATABASE_URL", "postgresql+psycopg://example")
 
     assert Settings().database_url == "postgresql+psycopg://example"
+
+
+def test_settings_escape_reserved_database_password_characters(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("ARCHEOTECH_DATABASE_URL", raising=False)
+    monkeypatch.setenv("ARCHEOTECH_DATABASE_PASSWORD", "p@:/#%ss")
+
+    assert Settings().database_url == "postgresql+psycopg://archeotech:p%40%3A%2F%23%25ss@localhost:5432/archeotech"

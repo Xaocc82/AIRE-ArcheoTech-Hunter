@@ -9,6 +9,8 @@ def test_dockerfile_runs_as_unprivileged_user() -> None:
     assert "USER archeotech" in dockerfile
     assert "chown -R archeotech:archeotech /var/lib/aire-archeotech" in dockerfile
     assert "uvicorn" in dockerfile
+    assert "@sha256:" in dockerfile
+    assert "--no-build-isolation --no-deps" in dockerfile
 
 
 def test_production_compose_binds_application_to_loopback_only() -> None:
@@ -16,13 +18,17 @@ def test_production_compose_binds_application_to_loopback_only() -> None:
 
     assert '"127.0.0.1:8088:8088"' in compose
     assert "service_healthy" in compose
+    assert "@sha256:" in compose
+    assert "ARCHEOTECH_DATABASE_PASSWORD" in compose
+    assert "ARCHEOTECH_DATABASE_URL" not in compose
 
 
 def test_production_environment_file_is_not_committed() -> None:
     gitignore = (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8")
     dockerignore = (PROJECT_ROOT / ".dockerignore").read_text(encoding="utf-8")
 
-    assert ".env.production" in gitignore
+    assert ".env*" in gitignore
+    assert "!.env.production.example" in gitignore
     assert ".env*" in dockerignore
     assert not (PROJECT_ROOT / ".env.production").exists()
 

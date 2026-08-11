@@ -1,0 +1,8 @@
+# Python 3.12 build backend graph for CI and the production image.
+editables==0.6
+hatchling==1.32.0
+packaging==26.3
+pathspec==1.1.1
+pluggy==1.6.0
+tomlkit==0.15.1
+trove-classifiers==2026.6.1.19
