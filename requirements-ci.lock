@@ -1,4 +1,4 @@
-# Generated from the Python 3.12 CI environment; CI installs only these exact versions.
+# Python 3.12 runtime/development graph for CI. Install with --no-deps and --no-build-isolation.
 -e .
 alembic==1.19.1
 annotated-doc==0.0.5
@@ -45,5 +45,6 @@ typing-inspection==0.4.3
 typing_extensions==4.16.0
 tzdata==2026.3
 uvicorn==0.52.1
+uvloop==0.22.1 ; sys_platform == "linux"
 watchfiles==1.2.0
 websockets==17.0.1
