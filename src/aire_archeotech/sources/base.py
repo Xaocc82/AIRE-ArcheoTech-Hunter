@@ -32,27 +32,50 @@ class SourceHit:
 
 @dataclass(frozen=True)
 class SourceTransportResponse:
-    source_url: str
+    requested_url: str
+    final_url: str
     status_code: int
     retrieved_at: datetime
     body: bytes
+    content_type: str
 
 
 @dataclass(frozen=True)
 class SourceAccessEvidence:
-    source_url: str
+    requested_url: str
+    final_url: str
     status_code: int
     retrieved_at: datetime
     terms_reference: str
     rights_reference: str
+    request_sha256: str
     raw_response_sha256: str
     response_byte_size: int
+    content_type: str
+
+
+class SourceSearchFailure(ValueError):
+    """A rejected source attempt whose stored evidence remains inspectable."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        access: SourceAccessEvidence,
+        raw_request: StoredBlob,
+        raw_response: StoredBlob,
+    ) -> None:
+        super().__init__(message)
+        self.access = access
+        self.raw_request = raw_request
+        self.raw_response = raw_response
 
 
 @dataclass(frozen=True)
 class SourceSearchResult:
     hits: tuple[SourceHit, ...]
     access: SourceAccessEvidence
+    raw_request: StoredBlob
     raw_response: StoredBlob
 
 

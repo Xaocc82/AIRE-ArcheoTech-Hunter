@@ -18,7 +18,8 @@ def test_ntrs_search_normalizes_record_and_respects_limit(tmp_path) -> None:
         assert timeout == 20.0
         assert loads(request.data or b"{}") ["size"] == 1
         return SourceTransportResponse(
-            source_url=request.full_url,
+            requested_url=request.full_url,
+            final_url=request.full_url,
             status_code=200,
             retrieved_at=datetime(2026, 8, 10, tzinfo=UTC),
             body=dumps(
@@ -32,6 +33,7 @@ def test_ntrs_search_normalizes_record_and_respects_limit(tmp_path) -> None:
                     ]
                 }
             ).encode(),
+            content_type="application/json",
         )
 
     adapter = NasaNtrsAdapter(
